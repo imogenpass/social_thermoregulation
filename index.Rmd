@@ -1,0 +1,179 @@
+---
+title: "Social thermoregulation: how core body temperature is associated with social contact."
+output: html_document
+---
+```{r setup, include=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(ggthemes)
+library(colorspace)
+library(plotly)
+library(Cairo)
+```
+
+## Data Origin
+Social thermoregulation is well studied within other mammals, yet how social behaviour is embedded in the thermoregulatory system of humans has been explored to a lesser extent. Following the theory of social regulation by IJzerman et al. (2015), the Human Penguin Project was created (IJzerman et al., 2018). This research identified a variety of social and non-social factors that relate to core body temperature. Complex social integration (CSI), the quantity of high-contact social interaction experienced by an individual, was identified as a crucial predictor of core body temperature. Data was made available by the authors of the research on the open research platform OSF. The study was run in multiple locations to allow analysis of how CSI and core body temperature correlate with the climates of geographical locations.
+
+
+## Research Questions
+1) Is there a relationship between CSI and core body temperature?
+2) Is geographical location associated with this relationship?
+
+## Data Preparation
+The CSI score for each participant was calculated using specific items in the Social Network Index. These items were recoded following the codebook used in the original research. Any interactions 1+ were coded as 1, and 0 or NA responses coded as 0. These items were then combined to calculate the overall CSI score. Within the dataset the relevant variables were then: location, distance from the equator, average body temperature and CSI score.
+
+
+```{r data preparation, echo=TRUE}
+# load dataset
+csi_data <- read.csv("data/thermoreg_data.csv")
+
+# recode NA values
+csi_data[is.na(csi_data)] <- 0
+
+# recode SNI1: 1 -> 1; else 0
+csi_data$SNI1 <- ifelse(csi_data$SNI1 == 1, 1, 0)
+
+# recode SNI items: 0 -> 0; else 1
+  # this method is repetitive and long
+csi_data$SNI3 <- ifelse(csi_data$SNI3 == 0, 0, 1)
+csi_data$SNI5 <- ifelse(csi_data$SNI5 == 0, 0, 1)
+csi_data$SNI7 <- ifelse(csi_data$SNI7 == 0, 0, 1)
+csi_data$SNI9 <- ifelse(csi_data$SNI9 == 0, 0, 1)
+csi_data$SNI11 <- ifelse(csi_data$SNI11 == 0, 0, 1)
+csi_data$SNI13 <- ifelse(csi_data$SNI13 == 0, 0, 1)
+csi_data$SNI15 <- ifelse(csi_data$SNI15 == 0, 0, 1)
+csi_data$SNI17 <- ifelse(csi_data$SNI17 == 0, 0, 1)
+csi_data$SNI18 <- ifelse(csi_data$SNI18 == 0, 0, 1)
+csi_data$SNI19 <- ifelse(csi_data$SNI19 == 0, 0, 1)
+csi_data$SNI21 <- ifelse(csi_data$SNI21 == 0, 0, 1)
+
+# combine SNI17 & SNI18 together as SNI_work
+csi_data <- csi_data %>%
+  mutate(sni_work = SNI17 + SNI18) %>%
+  relocate(sni_work, .before = SNI19)
+
+# recode SNI items 28, 29, 30, 31, 32: 
+csi_data$SNI28 <- ifelse(csi_data$SNI28 == 0, 0, 1)
+csi_data$SNI29 <- ifelse(csi_data$SNI29 == 0, 0, 1)
+csi_data$SNI30 <- ifelse(csi_data$SNI30 == 0, 0, 1)
+csi_data$SNI31 <- ifelse(csi_data$SNI31 == 0, 0, 1)
+csi_data$SNI32 <- ifelse(csi_data$SNI32 == 0, 0, 1)
+
+# combine SNI items 28, 29, 30, 31, 32 to SNI_extra
+csi_data <- csi_data %>%
+  mutate(sni_extra = SNI28 + SNI29 + SNI30 + SNI31 + SNI32) %>%
+    relocate(sni_extra, .after = SNI27)
+
+# remove combined SNI items
+csi_data <- csi_data %>%
+  select(-SNI17, -SNI18, -SNI28, -SNI29, -SNI30, -SNI31, -SNI32)
+
+# calculate sn_diversity score
+csi_data <- csi_data %>%
+  mutate(sni_all = SNI1 + SNI3 + SNI5 + SNI7 + SNI9 + SNI11 + SNI13 + SNI15 + SNI19 + SNI21) %>%
+    mutate(csi_score = sni_all + sni_extra + sni_work)
+
+# rename site to remove capital
+csi_data <- csi_data %>%
+  rename(location = Site, equator_distance = DEQ)
+
+# change distance to km
+csi_data$equator_distance <- csi_data$equator_distance * 100
+
+# select only relevant columns for visualisation: location, avgtemp & sn_diversity and save to new data frame
+csi_visual <- csi_data %>%
+  select(location, equator_distance, avgtemp, csi_score)
+
+# remove rows with equator distance vale of 0
+csi_visual <- csi_visual[!(csi_visual$equator_distance ==  0.00000),]
+
+csi_visual <- csi_visual[!(csi_visual$csi_score == 0),]
+
+head(csi_visual)
+```
+
+
+## Visualisation 1
+
+```{r Visualisation 1, echo = TRUE, fig.height = 6, fig.width = 9.48}
+# graph 1 to show distribution of average body temp across CSI scores
+
+# axis labels
+xlabel <- "CSI Score"
+ylabel <- "Average Core Body Temperature"
+
+# code for the graph
+csi_temp <- ggplot(csi_visual, aes(x = factor(csi_score), y = avgtemp, col = factor(csi_score))) +
+  xlab(xlabel) + ylab(ylabel) +
+    labs(title = "Distribution of individual average core body temperature across CSI scores", subtitle = "The impact of complex social integration on the regulation of core body temperature") +
+      geom_boxplot(outlier.shape = 4, size = 1) +
+        geom_jitter(width = 0.25, color = "grey", alpha = 0.25) +
+          scale_y_continuous(breaks = seq(35, 39.5, by = 0.5)) +
+            theme_fivethirtyeight() +
+              theme(axis.title = element_text(size = 12),legend.position = "none") +
+                scale_color_discrete_diverging("berlin")
+
+# add interactivity
+ggplotly(csi_temp, tooltip = "avgtemp") %>%
+  config(displayModeBar = FALSE, displaylogo = FALSE) %>%
+    layout(title = list(text = paste0("Distribution of individual average core body temperature across CSI scores", "<br>", "<sup>", "The impact of complex social integration on the regulation of core body temperature", "</sup>")), dragmode = "select")
+```
+
+```{r Save graph 1, message=FALSE, warning=FALSE, include=FALSE}
+# save graph 1
+ggsave("figures/csi_temp.png", plot = csi_temp, width = 10)
+```
+
+This initial visualisation provides an insight into how average core body temperature is distributed across each CSI score. Importantly, outliers can be easily identified and it shows a smaller number of individuals recorded very high core body temperatures, which could possibly result from issues with measuring procedures.
+
+However, the inclusion of individual core body temperatures at each CSI score demonstrates the uneven distribution of how individuals scored on the CSI measure. Additionally, the inclusion of outliers makes it difficult to determine whether a clear relationship between core body temperature and CSI score exists.
+
+## Visualisation 2
+
+```{r Visualisation 2, echo = TRUE, warning = FALSE, fig.height = 6, fig.width = 9.48}
+# graph 2: use body temp mean for clearer graph and include distance from the equator
+
+# create temp mean across csi scores
+csi_visual_temp_mean <- aggregate(csi_visual$avgtemp, 
+                        by = list(csi_visual$csi_score), 
+                        FUN = mean) %>%
+                          rename(csi_score = Group.1, mean_avgtemp = x)
+
+# create distance mean across csi scores  
+csi_visual_distance_mean <- aggregate(csi_visual$equator_distance,
+                            by = list(csi_visual$csi_score),
+                            FUN = mean) %>%
+                              rename(csi_score = Group.1, mean_distance = x)
+
+# x and y axis
+xlabel <- "CSI Score"
+ylabel <- "Calculated Mean of Average Core Body Temperature"
+
+# code for the graph
+csi_temp_mean <- ggplot(csi_visual_temp_mean, aes(x = csi_score, y = mean_avgtemp, color = csi_visual_distance_mean$mean_distance, text = paste("Mean core body temp:", round(mean_avgtemp, digits = 1), "<br>Distance from the equator:", round(csi_visual_distance_mean$mean_distance, digits = 1)))) +
+  xlab(xlabel) + ylab(ylabel) +
+    labs(title = "Association between mean average body temperature and CSI scores", subtitle = "Relationship considered with regards to the distance from the equator", color = "Km from the equator") +
+      geom_point(size = 4) +
+        scale_x_continuous(breaks = seq(3, 18, by = 1)) +
+          theme_fivethirtyeight() +
+            theme(axis.title = element_text(), legend.title = element_text(size = 10), legend.key.width = unit(1, "cm")) +
+              scale_color_continuous_sequential("burgyl")
+
+# add interactivity
+ggplotly(csi_temp_mean, tooltip = "text") %>%
+  config(displayModeBar = FALSE, displaylogo = FALSE) %>%
+    layout(title = list(text = paste0("Association between mean average body temperature and CSI scores", "<br>", "<sup>", "The relationship is considered with regards to the distance from the equator", "</sup>")))
+```
+```{r Save graph 2, message=FALSE, warning=FALSE, include=FALSE}
+# save graph 2
+ggsave("figures/csi_temp.png", plot = csi_temp_mean, width = 10)
+```
+
+This second visualisation better demonstrates a relationship between CSI scores and core body temperature, as well as considering the involvement of distance from the equator. Calculating the mean core body temperature across each individual CSI score reveals a less cluttered graph. Based on this, it appears CSI scores are associated with core body temperature at lower to medium CSI scores.
+
+## Summary
+The visualisations demonstrate a weak relationship between CSI score and core body temperature, wherein as one increases so does the other. However, not all data points are consistent with this pattern. Importantly, the research identified CSI as the strongest predictor of core body temperature, yet not the only predictor - this visualisation does not account for other factors other than distance from the equator. The next step could involve some of the other factors predicting core body temperature in order to compare them.
+
+The data was collated from studies run in multiple locations which could explain the inconsistencies in data collection. Importantly, the coding of the raw data was inconsistent with the instructions included for some individuals. It's possible this affected the visualisations, however I didn't identify this until after beginning the project. When working with data in the future I will be more aware of whether the data is consistent.
+
+In terms of the visualisation itself, I would have liked to improve the interactivity of the graph to ensure it matches the function of the visualisation. Finally, it would have been helpful to develop a function or include a loop when recoding the variables. The current code is repetitive, however I was unable to find a solution.
